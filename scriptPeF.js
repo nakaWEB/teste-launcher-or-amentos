@@ -1546,70 +1546,133 @@ setTimeout(() => {
             document.getElementById("linha5").textContent = "R$ " + ((totalComImposto * 0.05 + totalComImposto) / 4).toFixed(2).replace('.', ',');
         }
 
-        /* ----------  SALVA DIRETO EM C:\Users\As informática\Downloads\orçamentos  ---------- */
-        /* ----------  SALVAR PEDINDO PASTA E VERSÃO  ---------- */
-        async function salvarNaPastaOrcamentos(blob, nomeArquivo) {
-            /* 1. Escolhe a pasta (sempre) */
-            let dirHandle;
-            try {
-                dirHandle = await window.showDirectoryPicker({ startIn: 'downloads' });
-            } catch (err) {
-                if (err.name === 'AbortError') {
-                    showNotification('❌ Você cancelou a escolha da pasta.', 'warning', 3000);
-                } else {
-                    showNotification('❌ Erro ao escolher pasta: ' + err.message, 'error', 3000);
-                }
-                return;
-            }
+async function salvarNaPastaOrcamentos(blob, nomeArquivo) {
+    try {
+        // Tenta acessar a pasta específica diretamente
+        const dirHandle = await window.showDirectoryPicker({
+            startIn: 'downloads',
+            id: 'pasta-orcamentos-2025'
+        });
 
-            /* 2. Normaliza o nome base para comparação */
-            const ext = nomeArquivo.match(/(\.\w+)$/)?.[1] || '';
-            const base = nomeArquivo.replace(/(\s*\(\d+\))?(\.\w+)?$/i, ''); // remove (n) e extensão
-            const normaliza = (s) => s.toLowerCase().replace(/\s+/g, '');
+        // Verifica se já existe arquivo com nome parecido
+        const arqs = [];
+        for await (const [nome, handle] of dirHandle.entries()) {
+            if (handle.kind === 'file') arqs.push(nome);
+        }
 
-            /* 3. Lista arquivos existentes e busca “parecidos” */
-            const arqs = [];
-            for await (const [nome, handle] of dirHandle.entries()) {
-                if (handle.kind === 'file') arqs.push(nome);
-            }
+        // Remove extensão e numeração anterior do nome base
+        const ext = nomeArquivo.match(/(\.\w+)$/)?.[1] || '';
+        const base = nomeArquivo.replace(/(\s*\(\d+\))?(\.\w+)?$/i, '');
+        
+        const parecidos = arqs.filter(n => 
+            n.replace(/(\s*\(\d+\))?(\.\w+)?$/i, '').toLowerCase() === base.toLowerCase()
+        );
 
-            const parecidos = arqs.filter(n =>
-                normaliza(n.replace(/(\s*\(\d+\))?(\.\w+)?$/i, '')) === normaliza(base)
+        let nomeFinal = nomeArquivo;
+        
+        if (parecidos.length > 0) {
+            // Pergunta o que fazer
+            const querSubstituir = confirm(
+                `Já existe um arquivo com nome parecido: "${parecidos[0]}".\n\n` +
+                `Clique em "OK" para SUBSTITUIR ou em "Cancelar" para criar uma nova versão.`
             );
 
-            /* 4. Decide o nome final */
-            let nomeFinal = nomeArquivo;
-
-            if (parecidos.length) {
-                // Pergunta o que fazer
-                const querSubstituir = confirm(
-                    `Já existe um arquivo com nome parecido: “${parecidos[0]}”.\n\n` +
-                    `Clique em “OK” para SUBSTITUIR ou em “Cancelar” para criar uma nova versão.`
-                );
-
-                if (!querSubstituir) {
-                    // Criar nova versão com próximo (n)
-                    const nums = parecidos
-                        .map(n => Number(n.match(/\((\d+)\)/)?.[1]) || 0)
-                        .sort((a, b) => b - a);
-                    const prox = (nums[0] || 0) + 1;
-                    nomeFinal = `${base} (${prox})${ext}`;
-                } else {
-                    nomeFinal = parecidos[0]; // mantém o nome exato para sobrescrever
-                }
-            }
-
-            /* 5. Grava o arquivo */
-            try {
-                const handle = await dirHandle.getFileHandle(nomeFinal, { create: true });
-                const writable = await handle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                showNotification(`✅ Salvo como “${nomeFinal}”`, 'success', 3000);
-            } catch (err) {
-                showNotification('❌ Erro ao salvar: ' + err.message, 'error', 3000);
+            if (!querSubstituir) {
+                // Criar nova versão com próximo (n)
+                const nums = parecidos
+                    .map(n => Number(n.match(/\((\d+)\)/)?.[1]) || 0)
+                    .sort((a, b) => b - a);
+                const prox = (nums[0] || 0) + 1;
+                nomeFinal = `${base} (${prox})${ext}`;
+            } else {
+                nomeFinal = parecidos[0]; // mantém o nome exato para sobrescrever
             }
         }
+
+        // Grava o arquivo
+        const handle = await dirHandle.getFileHandle(nomeFinal, { create: true });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        
+        showNotification(`✅ Salvo como "${nomeFinal}"`, 'success', 3000);
+        
+        // Atualiza a lista de orçamentos se estiver na página de orçamentos
+        if (window.location.pathname.includes('orcamentos.html')) {
+            carregarOrcamentosDaPasta();
+        }
+        
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            showNotification('❌ Você cancelou a escolha da pasta.', 'warning', 3000);
+        } else {
+            showNotification('❌ Erro ao salvar: ' + err.message, 'error', 3000);
+        }
+    }
+}
+
+// Adicionar função para carregar orçamentos da pasta
+async function carregarOrcamentosDaPasta() {
+    try {
+        // Tenta acessar a pasta específica
+        const dirHandle = await window.showDirectoryPicker({
+            startIn: 'downloads',
+            id: 'pasta-orcamentos-2025'
+        });
+
+        const orcamentos = [];
+        
+        for await (const [nome, handle] of dirHandle.entries()) {
+            if (handle.kind === 'file' && nome.endsWith('.xlsx')) {
+                const file = await handle.getFile();
+                const arrayBuffer = await file.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+                
+                // Extrai dados do cliente do arquivo
+                const cliente = {
+                    nome: String(rows[1]?.[1] || '').trim(),
+                    endereco: String(rows[2]?.[1] || '').trim(),
+                    telefone: String(rows[3]?.[1] || '').trim(),
+                    data: String(rows[4]?.[1] || '').trim(),
+                    servico: String(rows[5]?.[1] || '').trim(),
+                    funcionario: String(rows[6]?.[1] || '').trim(),
+                    numero: String(rows[7]?.[1] || '').trim()
+                };
+                
+                // Calcula o total (procura na linha do total)
+                let total = 0;
+                for (let i = rows.length - 1; i >= 0; i--) {
+                    const row = rows[i];
+                    if (row && row[0] && row[0].toString().toUpperCase().includes('TOTAL')) {
+                        const valorCell = row[7] || row[6] || '0';
+                        total = parseFloat(valorCell.toString().replace('R$', '').replace(',', '.')) || 0;
+                        break;
+                    }
+                }
+                
+                orcamentos.push({
+                    id: cliente.numero || file.name,
+                    cliente: cliente,
+                    arquivo: nome,
+                    dataCriacao: new Date(file.lastModified).toISOString(),
+                    total: total,
+                    status: 'ativo',
+                    criadoPor: cliente.funcionario || 'Sistema'
+                });
+            }
+        }
+        
+        // Salva no localStorage para uso na página orcamentos.html
+        localStorage.setItem('orcamentosPasta2025', JSON.stringify(orcamentos));
+        
+        return orcamentos;
+        
+    } catch (err) {
+        console.error('Erro ao carregar orçamentos da pasta:', err);
+        return [];
+    }
+}
 
         function showNotification(msg, tipo = 'info', tempoMs = 0) {
             const box = document.createElement('div');

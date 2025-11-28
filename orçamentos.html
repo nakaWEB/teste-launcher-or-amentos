@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gerenciar Orçamentos - AS INFORMATICA</title>
-    <link rel="stylesheet" href="./stylegeral.css">
+    <link rel="stylesheet" href="./styleINDEX.css">
     <link rel="stylesheet" href="./stylePeF.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -140,6 +140,23 @@
         }
     </script>
 
+            <footer id="contact">
+        <p>AS INFORMATICA &copy; 2015-2026</p>
+    </footer>
+
+        <audio id="meuAudio" autoplay>
+        <source src="rainy-lofi-city-lofi-music-332746.mp3" type="audio/mpeg">
+    </audio>
+
+        <nav id="navbar">
+        <div class="nav-container">
+            <a href="./index.html" class="logo">AS INFORMATICA</a>
+            <ul class="nav-menu">
+                <li><a href="#home"></a></li>
+            </ul>
+        </div>
+    </nav>
+
     <div class="orcamentos-container">
         <div class="header-actions">
             <h1><i class="fas fa-file-alt"></i> Gerenciar Orçamentos</h1>
@@ -193,10 +210,59 @@
             });
         });
 
-        function carregarOrcamentos() {
-            const orcamentos = listarOrcamentos();
-            renderizarOrcamentos(orcamentos);
-        }
+async function carregarOrcamentos() {
+    // Primeiro tenta carregar da pasta
+    const orcamentosPasta = await carregarOrcamentosDaPasta();
+    
+    // Depois carrega do banco de dados local
+    const orcamentosBanco = listarOrcamentos();
+    
+    // Combina os dois arrays
+    const todosOrcamentos = [...orcamentosPasta, ...orcamentosBanco];
+    
+    // Remove duplicatas baseado no ID
+    const orcamentosUnicos = todosOrcamentos.filter((orc, index, self) => 
+        index === self.findIndex(o => o.id === orc.id)
+    );
+    
+    // Ordena por data (mais recente primeiro)
+    orcamentosUnicos.sort((a, b) => new Date(b.dataCriacao) - new Date(a.dataCriacao));
+    
+    renderizarOrcamentos(orcamentosUnicos);
+}
+
+// Adicionar botão para recarregar da pasta
+function adicionarBotaoRecarregar() {
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+        const btnRecarregar = document.createElement('button');
+        btnRecarregar.className = 'btn-info';
+        btnRecarregar.innerHTML = '<i class="fas fa-sync"></i> Recarregar Pasta';
+        btnRecarregar.onclick = async () => {
+            btnRecarregar.disabled = true;
+            btnRecarregar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Carregando...';
+            
+            await carregarOrcamentos();
+            
+            btnRecarregar.disabled = false;
+            btnRecarregar.innerHTML = '<i class="fas fa-sync"></i> Recarregar Pasta';
+            showNotification('Orçamentos recarregados da pasta!', 'success');
+        };
+        
+        headerActions.appendChild(btnRecarregar);
+    }
+}
+
+// Chamar a função ao carregar a página
+window.addEventListener('DOMContentLoaded', function() {
+    carregarOrcamentos();
+    adicionarBotaoRecarregar();
+    
+    // Busca em tempo real
+    document.getElementById('searchInput').addEventListener('input', function() {
+        buscarOrcamentos();
+    });
+});
 
         function buscarOrcamentos() {
             const filtro = document.getElementById('searchInput').value;

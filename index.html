@@ -31,8 +31,8 @@
            <li><a href="./planilhatoldo.html">TOLDOS</a></li>
            <li><a href="./atendimento.html">ATENDIMENTO</a></li>
            <li><a href="./orçamentos.html">OÇAMENTOS</a></li>
+           <li><a href="./admin.html">ADMIN</a></li>
         </ul>   
-
         </div>
     </nav>
 
@@ -52,6 +52,32 @@
             </ul>
         </div>
     </nav>
+
+    <script>
+// Verifica se é ADM e mostra o botão de admin
+function verificarEAdicionarBotaoAdmin() {
+    const session = localStorage.getItem('sessionASInfo');
+    if (session) {
+        try {
+            const parsed = JSON.parse(session);
+            if (parsed.tipo === 'ADM') {
+                // Adiciona botão de admin na navbar
+                const navMenu = document.querySelector('.nav-orç-menu');
+                if (navMenu && !document.querySelector('a[href="./admin.html"]')) {
+                    const adminLi = document.createElement('li');
+                    adminLi.innerHTML = '<a href="./admin.html">ADMIN</a>';
+                    navMenu.appendChild(adminLi);
+                }
+            }
+        } catch (e) {
+            console.warn('Sessão inválida');
+        }
+    }
+}
+
+// Executa ao carregar a página
+document.addEventListener('DOMContentLoaded', verificarEAdicionarBotaoAdmin);
+</script>
 </body>
 
 </html>

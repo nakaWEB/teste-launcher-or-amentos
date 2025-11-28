@@ -168,10 +168,20 @@
             }
         });
         
-        // Verifica se já está logado
-        if (verificarLogin()) {
-            window.location.href = 'placas-fachadas.html';
+// Verifica se já está logado (apenas uma vez ao carregar)
+window.addEventListener('DOMContentLoaded', () => {
+    const session = localStorage.getItem('sessionASInfo');
+    if (session) {
+        try {
+            const parsed = JSON.parse(session);
+            if (parsed.id && parsed.tipo) {
+                window.location.href = 'placas-fachadas.html';
+            }
+        } catch (e) {
+            console.warn('Sessão inválida, permanecendo na página de login.');
         }
+    }
+});
     </script>
 </body>
 </html>
