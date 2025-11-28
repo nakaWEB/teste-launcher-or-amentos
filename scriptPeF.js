@@ -1546,133 +1546,70 @@ setTimeout(() => {
             document.getElementById("linha5").textContent = "R$ " + ((totalComImposto * 0.05 + totalComImposto) / 4).toFixed(2).replace('.', ',');
         }
 
-async function salvarNaPastaOrcamentos(blob, nomeArquivo) {
-    try {
-        // Tenta acessar a pasta específica diretamente
-        const dirHandle = await window.showDirectoryPicker({
-            startIn: 'downloads',
-            id: 'pasta-orcamentos-2025'
-        });
+        /* ----------  SALVA DIRETO EM C:\Users\As informática\Downloads\orçamentos  ---------- */
+        /* ----------  SALVAR PEDINDO PASTA E VERSÃO  ---------- */
+        async function salvarNaPastaOrcamentos(blob, nomeArquivo) {
+            /* 1. Escolhe a pasta (sempre) */
+            let dirHandle;
+            try {
+                dirHandle = await window.showDirectoryPicker({ startIn: 'downloads' });
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    showNotification('❌ Você cancelou a escolha da pasta.', 'warning', 3000);
+                } else {
+                    showNotification('❌ Erro ao escolher pasta: ' + err.message, 'error', 3000);
+                }
+                return;
+            }
 
-        // Verifica se já existe arquivo com nome parecido
-        const arqs = [];
-        for await (const [nome, handle] of dirHandle.entries()) {
-            if (handle.kind === 'file') arqs.push(nome);
-        }
+            /* 2. Normaliza o nome base para comparação */
+            const ext = nomeArquivo.match(/(\.\w+)$/)?.[1] || '';
+            const base = nomeArquivo.replace(/(\s*\(\d+\))?(\.\w+)?$/i, ''); // remove (n) e extensão
+            const normaliza = (s) => s.toLowerCase().replace(/\s+/g, '');
 
-        // Remove extensão e numeração anterior do nome base
-        const ext = nomeArquivo.match(/(\.\w+)$/)?.[1] || '';
-        const base = nomeArquivo.replace(/(\s*\(\d+\))?(\.\w+)?$/i, '');
-        
-        const parecidos = arqs.filter(n => 
-            n.replace(/(\s*\(\d+\))?(\.\w+)?$/i, '').toLowerCase() === base.toLowerCase()
-        );
+            /* 3. Lista arquivos existentes e busca “parecidos” */
+            const arqs = [];
+            for await (const [nome, handle] of dirHandle.entries()) {
+                if (handle.kind === 'file') arqs.push(nome);
+            }
 
-        let nomeFinal = nomeArquivo;
-        
-        if (parecidos.length > 0) {
-            // Pergunta o que fazer
-            const querSubstituir = confirm(
-                `Já existe um arquivo com nome parecido: "${parecidos[0]}".\n\n` +
-                `Clique em "OK" para SUBSTITUIR ou em "Cancelar" para criar uma nova versão.`
+            const parecidos = arqs.filter(n =>
+                normaliza(n.replace(/(\s*\(\d+\))?(\.\w+)?$/i, '')) === normaliza(base)
             );
 
-            if (!querSubstituir) {
-                // Criar nova versão com próximo (n)
-                const nums = parecidos
-                    .map(n => Number(n.match(/\((\d+)\)/)?.[1]) || 0)
-                    .sort((a, b) => b - a);
-                const prox = (nums[0] || 0) + 1;
-                nomeFinal = `${base} (${prox})${ext}`;
-            } else {
-                nomeFinal = parecidos[0]; // mantém o nome exato para sobrescrever
-            }
-        }
+            /* 4. Decide o nome final */
+            let nomeFinal = nomeArquivo;
 
-        // Grava o arquivo
-        const handle = await dirHandle.getFileHandle(nomeFinal, { create: true });
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        
-        showNotification(`✅ Salvo como "${nomeFinal}"`, 'success', 3000);
-        
-        // Atualiza a lista de orçamentos se estiver na página de orçamentos
-        if (window.location.pathname.includes('orcamentos.html')) {
-            carregarOrcamentosDaPasta();
-        }
-        
-    } catch (err) {
-        if (err.name === 'AbortError') {
-            showNotification('❌ Você cancelou a escolha da pasta.', 'warning', 3000);
-        } else {
-            showNotification('❌ Erro ao salvar: ' + err.message, 'error', 3000);
-        }
-    }
-}
+            if (parecidos.length) {
+                // Pergunta o que fazer
+                const querSubstituir = confirm(
+                    `Já existe um arquivo com nome parecido: “${parecidos[0]}”.\n\n` +
+                    `Clique em “OK” para SUBSTITUIR ou em “Cancelar” para criar uma nova versão.`
+                );
 
-// Adicionar função para carregar orçamentos da pasta
-async function carregarOrcamentosDaPasta() {
-    try {
-        // Tenta acessar a pasta específica
-        const dirHandle = await window.showDirectoryPicker({
-            startIn: 'downloads',
-            id: 'pasta-orcamentos-2025'
-        });
-
-        const orcamentos = [];
-        
-        for await (const [nome, handle] of dirHandle.entries()) {
-            if (handle.kind === 'file' && nome.endsWith('.xlsx')) {
-                const file = await handle.getFile();
-                const arrayBuffer = await file.arrayBuffer();
-                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-                const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
-                
-                // Extrai dados do cliente do arquivo
-                const cliente = {
-                    nome: String(rows[1]?.[1] || '').trim(),
-                    endereco: String(rows[2]?.[1] || '').trim(),
-                    telefone: String(rows[3]?.[1] || '').trim(),
-                    data: String(rows[4]?.[1] || '').trim(),
-                    servico: String(rows[5]?.[1] || '').trim(),
-                    funcionario: String(rows[6]?.[1] || '').trim(),
-                    numero: String(rows[7]?.[1] || '').trim()
-                };
-                
-                // Calcula o total (procura na linha do total)
-                let total = 0;
-                for (let i = rows.length - 1; i >= 0; i--) {
-                    const row = rows[i];
-                    if (row && row[0] && row[0].toString().toUpperCase().includes('TOTAL')) {
-                        const valorCell = row[7] || row[6] || '0';
-                        total = parseFloat(valorCell.toString().replace('R$', '').replace(',', '.')) || 0;
-                        break;
-                    }
+                if (!querSubstituir) {
+                    // Criar nova versão com próximo (n)
+                    const nums = parecidos
+                        .map(n => Number(n.match(/\((\d+)\)/)?.[1]) || 0)
+                        .sort((a, b) => b - a);
+                    const prox = (nums[0] || 0) + 1;
+                    nomeFinal = `${base} (${prox})${ext}`;
+                } else {
+                    nomeFinal = parecidos[0]; // mantém o nome exato para sobrescrever
                 }
-                
-                orcamentos.push({
-                    id: cliente.numero || file.name,
-                    cliente: cliente,
-                    arquivo: nome,
-                    dataCriacao: new Date(file.lastModified).toISOString(),
-                    total: total,
-                    status: 'ativo',
-                    criadoPor: cliente.funcionario || 'Sistema'
-                });
+            }
+
+            /* 5. Grava o arquivo */
+            try {
+                const handle = await dirHandle.getFileHandle(nomeFinal, { create: true });
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                showNotification(`✅ Salvo como “${nomeFinal}”`, 'success', 3000);
+            } catch (err) {
+                showNotification('❌ Erro ao salvar: ' + err.message, 'error', 3000);
             }
         }
-        
-        // Salva no localStorage para uso na página orcamentos.html
-        localStorage.setItem('orcamentosPasta2025', JSON.stringify(orcamentos));
-        
-        return orcamentos;
-        
-    } catch (err) {
-        console.error('Erro ao carregar orçamentos da pasta:', err);
-        return [];
-    }
-}
 
         function showNotification(msg, tipo = 'info', tempoMs = 0) {
             const box = document.createElement('div');
@@ -1800,6 +1737,25 @@ async function carregarOrcamentosDaPasta() {
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const fileName = `ORÇAMENTO_${cliente.nome}_${cliente.servico}_${cliente.data}`
                 .replace(/\s+/g, '_') + '.xlsx';
+                // Salva no localStorage também
+const orcamentoData = {
+    id: cliente.numero || `ORC_${Date.now()}`,
+    cliente: cliente,
+    produtos: produtos,
+    total: total,
+    dataCriacao: new Date().toISOString(),
+    status: 'ativo',
+    criadoPor: cliente.funcionario || 'Sistema'
+};
+
+let orcamentos = JSON.parse(localStorage.getItem('orcamentosPasta2025') || '[]');
+const index = orcamentos.findIndex(o => o.id === orcamentoData.id);
+if (index >= 0) {
+    orcamentos[index] = orcamentoData;
+} else {
+    orcamentos.unshift(orcamentoData);
+}
+localStorage.setItem('orcamentosPasta2025', JSON.stringify(orcamentos));
             await salvarNaPastaOrcamentos(blob, fileName);
         }
 
@@ -2576,3 +2532,246 @@ async function carregarOrcamentosDaPasta() {
                 window.location.href = 'instrucoes.html';
             }
         });
+
+        // Função para salvar automaticamente na pasta específica
+// Função otimizada para salvar na pasta específica
+async function salvarNaPastaEspecifica(orcamentoData) {
+    try {
+        // Verifica se a API File System Access está disponível
+        if (!('showDirectoryPicker' in window)) {
+            console.log('API File System Access não disponível, salvando no localStorage');
+            return false;
+        }
+
+        // Tenta acessar a pasta Downloads
+        const dirHandle = await window.showDirectoryPicker({
+            startIn: 'downloads',
+            id: 'pasta-orcamentos-2025-especifica'
+        });
+
+        // Tenta acessar a pasta específica ou cria se não existir
+        let pastaOrcamentos;
+        const caminhoPastas = ['orçamestos 2025', 'orçamentos 2025', 'Downloads'];
+        
+        for (const nomePasta of caminhoPastas) {
+            try {
+                pastaOrcamentos = await dirHandle.getDirectoryHandle(nomePasta, { create: true });
+                break;
+            } catch (e) {
+                continue;
+            }
+        }
+
+        if (!pastaOrcamentos) {
+            // Se não conseguiu criar/acessar a pasta, tenta na raiz de Downloads
+            pastaOrcamentos = dirHandle;
+        }
+
+        // Cria o arquivo Excel
+        const wb = XLSX.utils.book_new();
+        const wsData = [
+            ['CLIENTE', orcamentoData.cliente.nome],
+            ['ENDEREÇO', orcamentoData.cliente.endereco],
+            ['TELEFONE', orcamentoData.cliente.telefone],
+            ['DATA', orcamentoData.cliente.data],
+            ['SERVIÇO', orcamentoData.cliente.servico],
+            ['FUNCIONÁRIO', orcamentoData.cliente.funcionario],
+            ['Nº', orcamentoData.cliente.numero],
+            [],
+            ['CÓDIGO', 'PRODUTO', 'UNID', 'COMPR', 'LARG', 'QTD', 'VALOR']
+        ];
+
+        orcamentoData.produtos.forEach(p => {
+            wsData.push([
+                p.codigo,
+                p.nome,
+                p.unidade,
+                p.comprimento,
+                p.largura,
+                p.quantidade,
+                p.valorTotal.toFixed(2).replace('.', ',')
+            ]);
+        });
+
+        wsData.push([]);
+        wsData.push(['', 'TOTAL', '', '', '', '', orcamentoData.total.toFixed(2).replace('.', ',')]);
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Orçamento');
+
+        // Nome do arquivo com data e hora para evitar conflitos
+        const agora = new Date();
+        const dataFormatada = agora.toLocaleDateString('pt-BR').replace(/\//g, '-');
+        const horaFormatada = agora.toLocaleTimeString('pt-BR').replace(/:/g, '-');
+        const fileName = `ORÇAMENTO_${orcamentoData.cliente.nome || 'SEM_NOME'}_${dataFormatada}_${horaFormatada}.xlsx`
+            .replace(/\s+/g, '_')
+            .replace(/[^a-zA-Z0-9-_]/g, '');
+
+        // Salva o arquivo
+        const fileHandle = await pastaOrcamentos.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }));
+        await writable.close();
+
+        console.log('✅ Orçamento salvo na pasta específica:', fileName);
+        return true;
+
+    } catch (err) {
+        console.log('ℹ️ Não foi possível salvar na pasta específica:', err.message);
+        return false;
+    }
+}
+
+// Função principal de salvamento automático
+async function salvarAutomaticamente() {
+    try {
+        // Coleta os dados do orçamento
+        const cliente = {
+            nome: document.getElementById('cliente_nome')?.value || '',
+            endereco: document.getElementById('cliente_endereco')?.value || '',
+            telefone: document.getElementById('cliente_telefone')?.value || '',
+            data: document.getElementById('cliente_data')?.value || '',
+            servico: document.getElementById('cliente_servico')?.value || '',
+            numero: document.getElementById('cliente_numero')?.value || '',
+            funcionario: document.getElementById('cliente_funcionario')?.value || ''
+        };
+
+        // Coleta os produtos
+        const produtos = [];
+        document.querySelectorAll('.planilha tbody tr').forEach(tr => {
+            const Q = parseFloat(tr.querySelector('.quantidade')?.value) || 0;
+            if (Q > 0) {
+                produtos.push({
+                    codigo: tr.cells[1]?.textContent.trim(),
+                    nome: tr.cells[2]?.textContent.trim(),
+                    unidade: tr.cells[5]?.textContent.trim(),
+                    largura: parseFloat(tr.querySelector('.largura')?.value) || 0,
+                    comprimento: parseFloat(tr.querySelector('.comprimento')?.value) || 0,
+                    quantidade: Q,
+                    valorTotal: parseFloat(tr.querySelector('.valor-total')?.textContent.replace(',', '.')) || 0
+                });
+            }
+        });
+
+        if (produtos.length === 0) return;
+
+        // Calcula o total
+        const total = produtos.reduce((sum, prod) => sum + prod.valorTotal, 0);
+
+        // Cria o objeto orçamento
+        const orcamento = {
+            id: cliente.numero || `ORC_${Date.now()}`,
+            cliente: cliente,
+            produtos: produtos,
+            total: total,
+            dataCriacao: new Date().toISOString(),
+            status: 'ativo'
+        };
+
+        // Tenta salvar na pasta específica primeiro
+        const salvouNaPasta = await salvarNaPastaEspecifica(orcamento);
+        
+        // Salva no localStorage como fallback
+        let orcamentos = JSON.parse(localStorage.getItem('orcamentosPasta2025') || '[]');
+        const index = orcamentos.findIndex(o => o.id === orcamento.id);
+        if (index >= 0) {
+            orcamentos[index] = orcamento;
+        } else {
+            orcamentos.unshift(orcamento);
+        }
+        localStorage.setItem('orcamentosPasta2025', JSON.stringify(orcamentos));
+
+        // Notifica o usuário
+        if (salvouNaPasta) {
+            showNotification('✅ Orçamento salvo na pasta específica!', 'success');
+        } else {
+            showNotification('✅ Orçamento salvo localmente!', 'info');
+        }
+
+        // Atualiza a lista de orçamentos se estiver na página de orçamentos
+        if (window.location.pathname.includes('orcamentos.html')) {
+            carregarOrcamentosDaPastaLocalStorage();
+        }
+
+    } catch (error) {
+        console.error('Erro ao salvar automaticamente:', error);
+        showNotification('❌ Erro ao salvar orçamento', 'error');
+    }
+}
+
+// Configurações de salvamento automático
+let ultimoSalvamento = 0;
+const INTERVALO_SALVAMENTO = 15000; // 15 segundos
+
+// Salva automaticamente quando há mudanças
+function configurarSalvamentoAutomatico() {
+    // Observa mudanças nos inputs
+    const observarMudancas = () => {
+        const agora = Date.now();
+        if (agora - ultimoSalvamento > INTERVALO_SALVAMENTO) {
+            const temProdutos = Array.from(document.querySelectorAll('.quantidade')).some(input => 
+                parseFloat(input.value) > 0
+            );
+            
+            if (temProdutos) {
+                salvarAutomaticamente();
+                ultimoSalvamento = agora;
+            }
+        }
+    };
+
+    // Adiciona listeners para mudanças
+    document.addEventListener('input', (e) => {
+        if (e.target.matches('.quantidade, .largura, .comprimento') || 
+            e.target.id?.startsWith('cliente_')) {
+            observarMudancas();
+        }
+    });
+
+    // Salva ao sair da página
+    window.addEventListener('beforeunload', () => {
+        const temProdutos = Array.from(document.querySelectorAll('.quantidade')).some(input => 
+            parseFloat(input.value) > 0
+        );
+        
+        if (temProdutos && Date.now() - ultimoSalvamento > 2000) {
+            salvarAutomaticamente();
+        }
+    });
+}
+
+// Inicia o salvamento automático
+configurarSalvamentoAutomatico();
+
+// Salva automaticamente a cada 30 segundos se houver produtos
+setInterval(() => {
+    const temProdutos = Array.from(document.querySelectorAll('.quantidade')).some(input => 
+        parseFloat(input.value) > 0
+    );
+    
+    if (temProdutos) {
+        salvarAutomaticamente();
+    }
+}, 10000); // 30 segundos
+
+// Salva ao sair da página
+window.addEventListener('beforeunload', () => {
+    const temProdutos = Array.from(document.querySelectorAll('.quantidade')).some(input => 
+        parseFloat(input.value) > 0
+    );
+    
+    if (temProdutos) {
+        salvarAutomaticamente();
+    }
+});
+
+// Função para garantir que os orçamentos sejam sempre salvos no localStorage
+function garantirPersistenciaOrcamentos() {
+    // Verifica se já existe a chave no localStorage
+    if (!localStorage.getItem('orcamentosPasta2025')) {
+        localStorage.setItem('orcamentosPasta2025', JSON.stringify([]));
+    }
+}
+
+// Chama ao iniciar
+garantirPersistenciaOrcamentos();

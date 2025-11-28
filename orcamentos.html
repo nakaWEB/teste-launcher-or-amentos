@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Orçamentos - AS INFORMATICA</title>
+    <link rel="stylesheet" href="./styleINDEX.css">
+    <link rel="stylesheet" href="./stylePeF.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .orcamentos-container {
+            margin-left: 25%;
+            padding: 20px;
+            max-width: 1200px;
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-container input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .orcamentos-table {
+            width: 100%;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .orcamentos-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .orcamentos-table th {
+            background: #000;
+            color: white;
+            padding: 15px;
+            text-align: left;
+        }
+
+        .orcamentos-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .orcamentos-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-action {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-edit {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-print {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .status-ativo {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inativo {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .btn-logout {
+            background: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Verificação de login -->
+    <script src="auth.js"></script>
+    <script>
+        const session = verificarLogin();
+        if (!session) {
+            window.location.href = 'login.html';
+        }
+    </script>
+
+            <footer id="contact">
+        <p>AS INFORMATICA &copy; 2015-2026</p>
+    </footer>
+
+        <audio id="meuAudio" autoplay>
+        <source src="rainy-lofi-city-lofi-music-332746.mp3" type="audio/mpeg">
+    </audio>
+
+        <nav id="navbar">
+        <div class="nav-container">
+            <a href="./index.html" class="logo">AS INFORMATICA</a>
+            <ul class="nav-menu">
+                <li><a href="#home"></a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="orcamentos-container">
+        <div class="header-actions">
+            <h1><i class="fas fa-file-alt"></i> Gerenciar Orçamentos</h1>
+            <button class="btn-logout" onclick="fazerLogout()">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+        </div>
+
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Buscar orçamento por nome do cliente ou serviço...">
+            <button class="btn-primary" onclick="buscarOrcamentos()">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+        </div>
+
+        <div class="orcamentos-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nº Orçamento</th>
+                        <th>Cliente</th>
+                        <th>Serviço</th>
+                        <th>Data</th>
+                        <th>Total</th>
+                        <th>Criado Por</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="orcamentosList">
+                    <!-- Orçamentos serão carregados aqui -->
+                </tbody>
+            </table>
+            
+            <div id="noResults" class="no-results" style="display: none;">
+                <i class="fas fa-search" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
+                <p>Nenhum orçamento encontrado.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="database.js"></script>
+    <script>
+        // Carregar orçamentos ao iniciar
+        window.addEventListener('DOMContentLoaded', function() {
+            carregarOrcamentos();
+            
+            // Busca em tempo real
+            document.getElementById('searchInput').addEventListener('input', function() {
+                buscarOrcamentos();
+            });
+        });
+
+// Função para carregar orçamentos do localStorage
+async function carregarOrcamentosDaPastaLocalStorage() {
+    try {
+        // Carrega do localStorage
+        const orcamentosLocal = JSON.parse(localStorage.getItem('orcamentosPasta2025') || '[]');
+        
+        // Carrega do banco de dados local
+        const orcamentosBanco = listarOrcamentos();
+        
+        // Combina os dois arrays
+        const todosOrcamentos = [...orcamentosLocal, ...orcamentosBanco];
+        
+        // Remove duplicatas baseado no ID
+        const orcamentosUnicos = todosOrcamentos.filter((orc, index, self) => 
+            index === self.findIndex(o => o.id === orc.id)
+        );
+        
+        // Ordena por data (mais recente primeiro)
+        orcamentosUnicos.sort((a, b) => new Date(b.dataCriacao) - new Date(a.dataCriacao));
+        
+        renderizarOrcamentos(orcamentosUnicos);
+        
+        // Se não houver orçamentos, tenta acessar a pasta
+        if (orcamentosUnicos.length === 0) {
+            console.log('ℹ️ Nenhum orçamento encontrado no localStorage, tentando acessar pasta...');
+            await carregarOrcamentosDaPasta(); // Mantém a função original como fallback
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar orçamentos:', error);
+        // Se falhar, tenta o método original
+        await carregarOrcamentosDaPasta();
+    }
+}
+
+// Função ultra-rápida para carregar do localStorage
+function carregarOrcamentosDaPastaLocalStorage() {
+    try {
+        const inicio = performance.now();
+        
+        // Carrega diretamente do localStorage (mais rápido)
+        const orcamentosLocal = JSON.parse(localStorage.getItem('orcamentosPasta2025') || '[]');
+        
+        // Processa em lotes para não travar a interface
+        const batchSize = 50;
+        let index = 0;
+        
+        function processarLote() {
+            const lote = orcamentosLocal.slice(index, index + batchSize);
+            if (lote.length === 0) {
+                const tempo = performance.now() - inicio;
+                console.log(`✅ Orçamentos carregados em ${tempo.toFixed(2)}ms`);
+                return;
+            }
+            
+            renderizarOrcamentos(orcamentosLocal.slice(0, index + batchSize));
+            index += batchSize;
+            
+            // Agenda próximo lote
+            requestIdleCallback(processarLote, { timeout: 50 });
+        }
+        
+        // Inicia o processamento
+        processarLote();
+        
+    } catch (error) {
+        console.error('Erro ao carregar do localStorage:', error);
+        renderizarOrcamentos([]);
+    }
+}
+
+// Função rápida para sincronizar com a pasta (opcional)
+async function sincronizarComPastaRapido() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+    
+    try {
+        // Verifica se a API está disponível
+        if (!('showDirectoryPicker' in window)) {
+            showNotification('API não disponível no seu navegador', 'warning');
+            return;
+        }
+        
+        // Acessa a pasta rapidamente
+        const dirHandle = await window.showDirectoryPicker({
+            startIn: 'downloads',
+            id: 'pasta-orcamentos-2025-rapido'
+        });
+        
+        // Tenta acessar a pasta específica
+        let pastaOrcamentos;
+        try {
+            pastaOrcamentos = await dirHandle.getDirectoryHandle('orçamestos 2025', { create: false });
+        } catch (e) {
+            try {
+                pastaOrcamentos = await dirHandle.getDirectoryHandle('orçamentos 2025', { create: false });
+            } catch (e2) {
+                showNotification('Pasta não encontrada', 'warning');
+                return;
+            }
+        }
+        
+        // Processa arquivos em lotes
+        const arquivos = [];
+        for await (const [nome, handle] of pastaOrcamentos.entries()) {
+            if (handle.kind === 'file' && nome.endsWith('.xlsx')) {
+                arquivos.push({ nome, handle });
+            }
+        }
+        
+        // Converte arquivos para dados do orçamento
+        const novosOrcamentos = [];
+        const batchSize = 5;
+        
+        for (let i = 0; i < arquivos.length; i += batchSize) {
+            const lote = arquivos.slice(i, i + batchSize);
+            const promessas = lote.map(async ({ nome, handle }) => {
+                try {
+                    const file = await handle.getFile();
+                    const arrayBuffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+                    
+                    // Extrai dados básicos
+                    const cliente = {
+                        nome: String(rows[0]?.[1] || '').trim(),
+                        endereco: String(rows[1]?.[1] || '').trim(),
+                        telefone: String(rows[2]?.[1] || '').trim(),
+                        data: String(rows[3]?.[1] || '').trim(),
+                        servico: String(rows[4]?.[1] || '').trim(),
+                        funcionario: String(rows[5]?.[1] || '').trim(),
+                        numero: String(rows[6]?.[1] || nome.replace('.xlsx', '')).trim()
+                    };
+                    
+                    // Calcula total aproximado
+                    let total = 0;
+                    for (let j = 10; j < rows.length; j++) {
+                        const row = rows[j];
+                        if (row && row[6]) {
+                            const valor = parseFloat(String(row[6]).replace('R$', '').replace(',', '.'));
+                            if (!isNaN(valor)) total += valor;
+                        }
+                    }
+                    
+                    return {
+                        id: cliente.numero || nome.replace('.xlsx', ''),
+                        cliente: cliente,
+                        arquivo: nome,
+                        dataCriacao: new Date(file.lastModified).toISOString(),
+                        total: total,
+                        status: 'ativo',
+                        criadoPor: cliente.funcionario || 'Sistema'
+                    };
+                } catch (err) {
+                    console.warn('Erro ao processar arquivo:', nome, err);
+                    return null;
+                }
+            });
+            
+            const resultados = await Promise.all(promessas);
+            novosOrcamentos.push(...resultados.filter(r => r !== null));
+        }
+        
+        // Atualiza o localStorage
+        if (novosOrcamentos.length > 0) {
+            const orcamentosExistentes = JSON.parse(localStorage.getItem('orcamentosPasta2025') || '[]');
+            const todosOrcamentos = [...novosOrcamentos, ...orcamentosExistentes];
+            
+            // Remove duplicatas
+            const unicos = todosOrcamentos.filter((orc, index, self) => 
+                index === self.findIndex(o => o.id === orc.id)
+            );
+            
+            localStorage.setItem('orcamentosPasta2025', JSON.stringify(unicos));
+            carregarOrcamentosDaPastaLocalStorage();
+            showNotification(`✅ ${novosOrcamentos.length} orçamentos sincronizados!`, 'success');
+        } else {
+            showNotification('Nenhum novo orçamento encontrado', 'info');
+        }
+        
+    } catch (err) {
+        console.error('Erro na sincronização rápida:', err);
+        showNotification('Erro ao sincronizar: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync"></i> Sincronizar Pasta';
+    }
+}
+
+// Configura o botão de sincronização rápida
+function configurarBotaoSincronizacaoRapida() {
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+        // Remove botão antigo se existir
+        const btnAntigo = headerActions.querySelector('.btn-sync-rapido');
+        if (btnAntigo) btnAntigo.remove();
+        
+        // Cria novo botão
+        const btnRapido = document.createElement('button');
+        btnRapido.className = 'btn-success btn-sync-rapido';
+        btnRapido.innerHTML = '<i class="fas fa-bolt"></i> Sincronização Rápida';
+        btnRapido.onclick = sincronizarComPastaRapido;
+        btnRapido.style.marginLeft = '10px';
+        
+        headerActions.appendChild(btnRapido);
+    }
+}
+// Adiciona botão para sincronizar com pasta
+function adicionarBotaoSincronizar() {
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+        const btnSincronizar = document.createElement('button');
+        btnSincronizar.className = 'btn-success';
+        btnSincronizar.innerHTML = '<i class="fas fa-sync"></i> Sincronizar Pasta';
+        btnSincronizar.onclick = async () => {
+            btnSincronizar.disabled = true;
+            btnSincronizar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+            
+            try {
+                await carregarOrcamentosDaPastaLocalStorage();
+                showNotification('Orçamentos sincronizados com sucesso!', 'success');
+            } catch (error) {
+                showNotification('Erro ao sincronizar: ' + error.message, 'error');
+            }
+            
+            btnSincronizar.disabled = false;
+            btnSincronizar.innerHTML = '<i class="fas fa-sync"></i> Sincronizar Pasta';
+        };
+        
+        headerActions.appendChild(btnSincronizar);
+    }
+}
+
+// Chama a função ao carregar a página
+window.addEventListener('DOMContentLoaded', function() {
+    // Carrega do localStorage primeiro (mais rápido)
+    carregarOrcamentosDaPastaLocalStorage();
+    
+    // Configura botão de sincronização rápida
+    configurarBotaoSincronizacaoRapida();
+    
+    // Adiciona botão de recarregar pasta (método tradicional)
+    adicionarBotaoRecarregar();
+    
+    // Busca em tempo real
+    document.getElementById('searchInput').addEventListener('input', function() {
+        buscarOrcamentos();
+    });
+    
+    // Tenta sincronizar com a pasta em background (sem travar a interface)
+    setTimeout(() => {
+        if ('showDirectoryPicker' in window) {
+            // Sincronização silenciosa em background
+            sincronizarComPastaRapido().catch(console.warn);
+        }
+    }, 2000);
+});
+
+// Adicionar botão para recarregar da pasta
+function adicionarBotaoRecarregar() {
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+        const btnRecarregar = document.createElement('button');
+        btnRecarregar.className = 'btn-info';
+        btnRecarregar.innerHTML = '<i class="fas fa-sync"></i> Recarregar Pasta';
+        btnRecarregar.onclick = async () => {
+            btnRecarregar.disabled = true;
+            btnRecarregar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Carregando...';
+            
+            await carregarOrcamentos();
+            
+            btnRecarregar.disabled = false;
+            btnRecarregar.innerHTML = '<i class="fas fa-sync"></i> Recarregar Pasta';
+            showNotification('Orçamentos recarregados da pasta!', 'success');
+        };
+        
+        headerActions.appendChild(btnRecarregar);
+    }
+}
+
+// Chamar a função ao carregar a página
+window.addEventListener('DOMContentLoaded', function() {
+    carregarOrcamentos();
+    adicionarBotaoRecarregar();
+    
+    // Busca em tempo real
+    document.getElementById('searchInput').addEventListener('input', function() {
+        buscarOrcamentos();
+    });
+});
+
+        function buscarOrcamentos() {
+            const filtro = document.getElementById('searchInput').value;
+            const orcamentos = listarOrcamentos(filtro);
+            renderizarOrcamentos(orcamentos);
+        }
+
+        function renderizarOrcamentos(orcamentos) {
+            const tbody = document.getElementById('orcamentosList');
+            const noResults = document.getElementById('noResults');
+            
+            if (orcamentos.length === 0) {
+                tbody.innerHTML = '';
+                noResults.style.display = 'block';
+                return;
+            }
+            
+            noResults.style.display = 'none';
+            
+            tbody.innerHTML = orcamentos.map(orc => `
+                <tr>
+                    <td>${orc.id}</td>
+                    <td>${orc.cliente.nome}</td>
+                    <td>${orc.cliente.servico}</td>
+                    <td>${new Date(orc.dataCriacao).toLocaleDateString('pt-BR')}</td>
+                    <td>R$ ${orc.total.toFixed(2).replace('.', ',')}</td>
+                    <td>${orc.criadoPor}</td>
+                    <td>
+                        <span class="status-badge status-${orc.status}">
+                            ${orc.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-action btn-edit" onclick="editarOrcamento('${orc.id}')" title="Editar">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn-action btn-print" onclick="imprimirOrcamento('${orc.id}')" title="Imprimir">
+                                <i class="fas fa-print"></i>
+                            </button>
+                            <button class="btn-action btn-delete" onclick="excluirOrcamento('${orc.id}')" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function editarOrcamento(id) {
+            const orcamento = buscarOrcamento(id);
+            if (!orcamento) {
+                alert('Orçamento não encontrado!');
+                return;
+            }
+            
+            // Salva o orçamento no localStorage para ser carregado na planilha
+            localStorage.setItem('orcamentoEditando', JSON.stringify(orcamento));
+            
+            // Redireciona para a planilha
+            window.location.href = 'placas-fachadas.html?editar=' + id;
+        }
+
+        function imprimirOrcamento(id) {
+            const orcamento = buscarOrcamento(id);
+            if (!orcamento) {
+                alert('Orçamento não encontrado!');
+                return;
+            }
+            
+            // Salva o orçamento temporariamente e executa a impressão
+            localStorage.setItem('orcamentoImprimindo', JSON.stringify(orcamento));
+            
+            // Abre uma nova janela para imprimir
+            const janela = window.open('imprimir.html?id=' + id, '_blank');
+        }
+
+        function excluirOrcamento(id) {
+            if (!confirm('Tem certeza que deseja excluir este orçamento?')) {
+                return;
+            }
+            
+            const resultado = excluirOrcamento(id);
+            if (resultado.sucesso) {
+                alert(resultado.mensagem);
+                carregarOrcamentos();
+            } else {
+                alert(resultado.mensagem);
+            }
+        }
+    </script>
+</body>
+</html>
