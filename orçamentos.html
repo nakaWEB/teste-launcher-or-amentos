@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Orçamentos - AS INFORMATICA</title>
+    <link rel="stylesheet" href="./stylegeral.css">
+    <link rel="stylesheet" href="./stylePeF.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .orcamentos-container {
+            margin-left: 25%;
+            padding: 20px;
+            max-width: 1200px;
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-container input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .orcamentos-table {
+            width: 100%;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .orcamentos-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .orcamentos-table th {
+            background: #000;
+            color: white;
+            padding: 15px;
+            text-align: left;
+        }
+
+        .orcamentos-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .orcamentos-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-action {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-edit {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-print {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .status-ativo {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inativo {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .btn-logout {
+            background: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Verificação de login -->
+    <script src="auth.js"></script>
+    <script>
+        const session = verificarLogin();
+        if (!session) {
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <div class="orcamentos-container">
+        <div class="header-actions">
+            <h1><i class="fas fa-file-alt"></i> Gerenciar Orçamentos</h1>
+            <button class="btn-logout" onclick="fazerLogout()">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+        </div>
+
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Buscar orçamento por nome do cliente ou serviço...">
+            <button class="btn-primary" onclick="buscarOrcamentos()">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+        </div>
+
+        <div class="orcamentos-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nº Orçamento</th>
+                        <th>Cliente</th>
+                        <th>Serviço</th>
+                        <th>Data</th>
+                        <th>Total</th>
+                        <th>Criado Por</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="orcamentosList">
+                    <!-- Orçamentos serão carregados aqui -->
+                </tbody>
+            </table>
+            
+            <div id="noResults" class="no-results" style="display: none;">
+                <i class="fas fa-search" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
+                <p>Nenhum orçamento encontrado.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="database.js"></script>
+    <script>
+        // Carregar orçamentos ao iniciar
+        window.addEventListener('DOMContentLoaded', function() {
+            carregarOrcamentos();
+            
+            // Busca em tempo real
+            document.getElementById('searchInput').addEventListener('input', function() {
+                buscarOrcamentos();
+            });
+        });
+
+        function carregarOrcamentos() {
+            const orcamentos = listarOrcamentos();
+            renderizarOrcamentos(orcamentos);
+        }
+
+        function buscarOrcamentos() {
+            const filtro = document.getElementById('searchInput').value;
+            const orcamentos = listarOrcamentos(filtro);
+            renderizarOrcamentos(orcamentos);
+        }
+
+        function renderizarOrcamentos(orcamentos) {
+            const tbody = document.getElementById('orcamentosList');
+            const noResults = document.getElementById('noResults');
+            
+            if (orcamentos.length === 0) {
+                tbody.innerHTML = '';
+                noResults.style.display = 'block';
+                return;
+            }
+            
+            noResults.style.display = 'none';
+            
+            tbody.innerHTML = orcamentos.map(orc => `
+                <tr>
+                    <td>${orc.id}</td>
+                    <td>${orc.cliente.nome}</td>
+                    <td>${orc.cliente.servico}</td>
+                    <td>${new Date(orc.dataCriacao).toLocaleDateString('pt-BR')}</td>
+                    <td>R$ ${orc.total.toFixed(2).replace('.', ',')}</td>
+                    <td>${orc.criadoPor}</td>
+                    <td>
+                        <span class="status-badge status-${orc.status}">
+                            ${orc.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-action btn-edit" onclick="editarOrcamento('${orc.id}')" title="Editar">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn-action btn-print" onclick="imprimirOrcamento('${orc.id}')" title="Imprimir">
+                                <i class="fas fa-print"></i>
+                            </button>
+                            <button class="btn-action btn-delete" onclick="excluirOrcamento('${orc.id}')" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function editarOrcamento(id) {
+            const orcamento = buscarOrcamento(id);
+            if (!orcamento) {
+                alert('Orçamento não encontrado!');
+                return;
+            }
+            
+            // Salva o orçamento no localStorage para ser carregado na planilha
+            localStorage.setItem('orcamentoEditando', JSON.stringify(orcamento));
+            
+            // Redireciona para a planilha
+            window.location.href = 'placas-fachadas.html?editar=' + id;
+        }
+
+        function imprimirOrcamento(id) {
+            const orcamento = buscarOrcamento(id);
+            if (!orcamento) {
+                alert('Orçamento não encontrado!');
+                return;
+            }
+            
+            // Salva o orçamento temporariamente e executa a impressão
+            localStorage.setItem('orcamentoImprimindo', JSON.stringify(orcamento));
+            
+            // Abre uma nova janela para imprimir
+            const janela = window.open('imprimir.html?id=' + id, '_blank');
+        }
+
+        function excluirOrcamento(id) {
+            if (!confirm('Tem certeza que deseja excluir este orçamento?')) {
+                return;
+            }
+            
+            const resultado = excluirOrcamento(id);
+            if (resultado.sucesso) {
+                alert(resultado.mensagem);
+                carregarOrcamentos();
+            } else {
+                alert(resultado.mensagem);
+            }
+        }
+    </script>
+</body>
+</html>
